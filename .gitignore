@@ -22,6 +22,8 @@ generate_merged_content.py
 validate_answer_key.py
 validate_courses.py
 verify_answer_key.py
+serve_app.py
+backup_progress.py
 
 # Editor and operating-system files
 .DS_Store

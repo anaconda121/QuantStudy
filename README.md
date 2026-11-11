@@ -1,16 +1,16 @@
 # QuantStudy
 
-QuantStudy is a responsive, browser-based workspace for quantitative interview practice. It brings a searchable question library, course reader, and personal progress dashboard into one interface. This project highlights front-end implementation: data-driven rendering in vanilla JavaScript, responsive CSS, search and filtering, hash-based deep links, interactive study controls, and browser persistence.
+QuantStudy is a static, responsive website for quantitative interview practice. It brings a searchable question library, course reader, and personal progress dashboard into one interface. This project highlights front-end implementation: data-driven rendering in vanilla JavaScript, responsive CSS, search and filtering, hash-based deep links, and interactive study controls.
 
 ## Run locally
 
-Requires Python 3. No package install or build step is needed.
+No database, backend, package install, or build step is needed. Open `index.html` directly, or serve the folder with any static file server. For example, with Python 3:
 
 ```bash
-python serve_app.py
+python -m http.server 4173
 ```
 
-Open **http://localhost:4173**. The server also saves progress snapshots to a local SQLite database. To view only the static front end, use any local static file server; browser storage still works without the SQLite endpoint.
+Open **http://localhost:4173**. The same files can be hosted on GitHub Pages.
 
 ## What to explore
 
@@ -21,7 +21,7 @@ Open **http://localhost:4173**. The server also saves progress snapshots to a lo
 - **Courses:** responsive lesson navigation and rendered mathematical content.
 - **Progress:** attempts, accuracy, confidence ratings, and topic coverage.
 
-Progress is stored in `localStorage` and IndexedDB. The optional Python server backs it up to SQLite on the same machine. No account is required.
+Progress is stored only in the visitor's browser using `localStorage`. No account or server storage is involved.
 
 ## Project structure
 
@@ -31,7 +31,6 @@ Progress is stored in `localStorage` and IndexedDB. The optional Python server b
 | `styles.css` | Responsive layout, components, and visual design |
 | `app.js` | Views, filtering, interactions, routing, and persistence |
 | `content.js`, `courses.js` | Data consumed by the front end |
-| `serve_app.py`, `backup_progress.py` | Optional local server and SQLite backup |
 
 ## Implementation notes
 

@@ -4,8 +4,6 @@ DATA.forEach(question => { if (answerOverrides[question.id]) question.answer = a
 const COURSES = window.COURSE_DATA || [];
 const GUIDANCE_ENABLED = false;
 const KEY = 'quantguide-local-progress-v1';
-const DB_NAME = 'quantguide-local-db';
-const DB_VERSION = 2;
 
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { saved = {}; }
@@ -14,6 +12,7 @@ const state = {
   questionType: '', tag: '', selected: null, selectedCourse: null, tab: 'prompt',
   answerDraft: {}, answerFeedback: {}, correctAttempts: {}, incorrectAttempts: {}, ...saved,
 };
+state.answerDraft = saved.answers || state.answerDraft;
 const app = document.querySelector('#app');
 const esc = (value = '') => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const richContent = (html, fallback = '') => html || esc(fallback).replace(/\n/g, '<br>');
@@ -45,16 +44,6 @@ function syncHash() {
 }
 readHash();
 
-let db;
-const openDB = () => new Promise((resolve, reject) => {
-  const request = indexedDB.open(DB_NAME, DB_VERSION);
-  request.onupgradeneeded = () => {
-    const database = request.result;
-    if (!database.objectStoreNames.contains('progress')) database.createObjectStore('progress', { keyPath: 'id' });
-    if (!database.objectStoreNames.contains('snapshots')) database.createObjectStore('snapshots', { keyPath: 'id' });
-  };
-  request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
-});
 const persist = () => {
   const snapshot = {
     version: 2,
@@ -64,34 +53,7 @@ const persist = () => {
     answerFeedback: state.answerFeedback || {}, correctAttempts: state.correctAttempts || {},
     incorrectAttempts: state.incorrectAttempts || {},
   };
-  try { localStorage.setItem(KEY, JSON.stringify(snapshot)); } catch { /* IndexedDB remains the fallback */ }
-  fetch('/api/progress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snapshot), keepalive: true }).catch(() => {});
-  if (!db) return;
-  const transaction = db.transaction(['progress', 'snapshots'], 'readwrite');
-  transaction.objectStore('snapshots').put({ id: 'latest', snapshot });
-  const store = transaction.objectStore('progress');
-  DATA.forEach(q => store.put({
-    id: q.id, completed: !!snapshot.completed[q.id], favorite: !!snapshot.favorites[q.id],
-    note: snapshot.notes[q.id] || '', rating: snapshot.ratings[q.id] || '', answer: snapshot.answers[q.id] || '',
-    feedback: snapshot.answerFeedback[q.id] || '', attempts: snapshot.attempts[q.id] || 0,
-    correct: snapshot.correctAttempts[q.id] || 0, incorrect: snapshot.incorrectAttempts[q.id] || 0,
-    updatedAt: snapshot.savedAt,
-  }));
-};
-const hydrateDB = async () => {
-  try {
-    db = await openDB();
-    const storedSnapshot = await new Promise((resolve, reject) => { const request = db.transaction('snapshots').objectStore('snapshots').get('latest'); request.onsuccess = () => resolve(request.result?.snapshot); request.onerror = () => reject(request.error); });
-    if (storedSnapshot?.savedAt > (saved.savedAt || 0)) saved = storedSnapshot;
-    const hasSnapshot = Boolean(saved.savedAt);
-    const rows = await new Promise((resolve, reject) => { const request = db.transaction('progress').objectStore('progress').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-    state.completed ??= {}; state.favorites ??= {}; state.notes ??= {}; state.ratings ??= {}; state.answerDraft ??= {}; state.attempts ??= {}; state.correctAttempts ??= {}; state.incorrectAttempts ??= {};
-    state.answerFeedback ??= {};
-    Object.assign(state, saved);
-    state.answerDraft = saved.answers || state.answerDraft;
-    if (!hasSnapshot) rows.forEach(row => { state.completed[row.id] = row.completed; state.favorites[row.id] = row.favorite; state.notes[row.id] = row.note; state.ratings[row.id] = row.rating; state.answerDraft[row.id] = row.answer || ''; state.answerFeedback[row.id] = row.feedback || ''; state.attempts[row.id] = row.attempts || 0; state.correctAttempts[row.id] = row.correct || 0; state.incorrectAttempts[row.id] = row.incorrect || 0; });
-    persist(); render();
-  } catch { /* localStorage remains the fallback */ }
+  try { localStorage.setItem(KEY, JSON.stringify(snapshot)); } catch { /* Storage may be unavailable in private browsing. */ }
 };
 
 const completed = () => Object.values(state.completed || {}).filter(Boolean).length;
@@ -135,7 +97,7 @@ function tagsView() {
 function progressView() {
   const reviewed = DATA.filter(q => state.ratings?.[q.id]); const good = reviewed.filter(q => state.ratings[q.id] === 'good').length;
   const attempts = Object.values(state.attempts || {}).reduce((sum, value) => sum + value, 0); const correct = Object.values(state.correctAttempts || {}).reduce((sum, value) => sum + value, 0); const wrong = Object.values(state.incorrectAttempts || {}).reduce((sum, value) => sum + value, 0);
-  return `<div class="wrap"><div class="hero"><div><div class="eyebrow">Your signal</div><h1>Progress that means something.</h1><p>Every submission is tracked locally across the merged archive.</p></div></div><div class="grid"><div class="card stat"><span class="label">Total attempts</span><span class="num">${attempts}</span><span class="delta">${Object.keys(state.attempts || {}).length} questions tried</span></div><div class="card stat"><span class="label">Correct</span><span class="num">${correct}</span><span class="delta">Auto-completed when right</span></div><div class="card stat"><span class="label">Incorrect</span><span class="num">${wrong}</span><span class="delta">Use these for review</span></div><div class="card stat"><span class="label">Graded accuracy</span><span class="num">${correct + wrong ? Math.round(correct / (correct + wrong) * 100) : 0}%</span><span class="delta">${completed()} completed total</span></div></div><div class="columns"><div class="card"><div class="section-head section-tight"><h2>Practice volume</h2><span>last 8 sessions</span></div><div class="chart">${[18, 32, 28, 45, 38, 61, 55, attempts ? Math.min(100, attempts * 7) : 20].map((height, index) => `<i class="barcol" style="height:${height}%" title="Session ${index + 1}"></i>`).join('')}</div><div class="legend"><span>older</span><span>now</span></div></div><div class="card"><div class="section-head section-tight"><h2>Confidence ratings</h2></div><div class="stat"><span class="num">${reviewed.length ? Math.round(good / reviewed.length * 100) : 0}%</span><span class="label">${good} confident of ${reviewed.length} rated</span><span class="delta">Keep rating honestly</span></div></div></div><div class="section-head"><h2>Coverage by discipline</h2></div><div class="card">${progressRows()}</div></div>`;
+  return `<div class="wrap"><div class="hero"><div><div class="eyebrow">Your signal</div><h1>Progress that means something.</h1><p>Every submission is tracked locally across the merged archive.</p></div></div><div class="grid"><div class="card stat"><span class="label">Total attempts</span><span class="num">${attempts}</span><span class="delta">${Object.keys(state.attempts || {}).length} questions tried</span></div><div class="card stat"><span class="label">Correct</span><span class="num">${correct}</span><span class="delta">Auto-completed when right</span></div><div class="card stat"><span class="label">Incorrect</span><span class="num">${wrong}</span><span class="delta">Use these for review</span></div><div class="card stat"><span class="label">Graded accuracy</span><span class="num">${correct + wrong ? Math.round(correct / (correct + wrong) * 100) : 0}%</span><span class="delta">${completed()} completed total</span></div></div><div class="columns"><div class="card"><div class="section-head section-tight"><h2>Answer breakdown</h2></div><div class="stat"><span class="num">${correct + wrong}</span><span class="label">Graded attempts</span><span class="delta">${correct} correct · ${wrong} incorrect</span></div></div><div class="card"><div class="section-head section-tight"><h2>Confidence ratings</h2></div><div class="stat"><span class="num">${reviewed.length ? Math.round(good / reviewed.length * 100) : 0}%</span><span class="label">${good} confident of ${reviewed.length} rated</span><span class="delta">Keep rating honestly</span></div></div></div><div class="section-head"><h2>Coverage by discipline</h2></div><div class="card">${progressRows()}</div></div>`;
 }
 
 function coursesView() {
@@ -190,4 +152,3 @@ function bind() {
 }
 window.addEventListener('hashchange', () => { readHash(); render(); });
 render();
-hydrateDB();
