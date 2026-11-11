@@ -1,0 +1,30 @@
+# Local progress and generated reports
+quantstudy-progress.json
+quantstudy-progress.sqlite3*
+answer_audit.json
+dedup_report.json
+answer_key.json
+proportional-bets-I-solution.md
+__pycache__/
+*.py[cod]
+
+# Downloaded source archives and exports
+quantable.io.zip
+quantable.io/
+quantguide.io/
+exports/
+
+# Local content processing utilities (require source archives above)
+audit_answers.py
+export_probability.py
+generate_content.py
+generate_merged_content.py
+validate_answer_key.py
+validate_courses.py
+verify_answer_key.py
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
